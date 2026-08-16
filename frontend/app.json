@@ -10,7 +10,10 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.emergent.dinescan.avlfag"
+      "bundleIdentifier": "com.emergent.dinescan.avlfag",
+      "infoPlist": {
+        "NSPhotoLibraryUsageDescription": "اختر صور الأصناف لعرضها في المنيو"
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -18,7 +21,8 @@
         "backgroundColor": "#000000"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.emergent.dinescan.avlfag"
+      "package": "com.emergent.dinescan.avlfag",
+      "permissions": ["READ_MEDIA_IMAGES"]
     },
     "web": {
       "bundler": "metro",

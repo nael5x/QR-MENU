@@ -1,0 +1,25 @@
+{
+  "summary": "Backend: 31/31 pytest cases pass covering auth (register/login/me), dashboard, restaurant update (orders_enabled toggle), branches CRUD + admin-only enforcement, tables with unique qr_token, categories, items CRUD + availability/visibility toggles, staff mgmt admin-only, public /api/public/menu/{qr_token} (200 for valid, 404 for invalid, no-auth), change logs recorded on sensitive edits, and multi-tenant isolation (tenant A cannot patch/delete/list tenant B branch). Frontend: Login (admin@demo.com/demo1234) succeeds and navigates to RTL Arabic dashboard; KPIs render (branches/tables/categories/items = 1 each); orders master switch toggles and reflects on customer public menu ('الطلب غير متاح حالياً' banner appeared when off); tab navigation to Branches/Menu/Settings works; Settings shows account, app language switcher (ar/en), menu languages checkboxes, and staff list. Register screen loads with all testIDs. Public web menu at /m/demo-table-1 renders restaurant name, branch/table label, category, item price and 'نداء النادل' button.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Global", "issues": ["Non-blocking console warning: 'Animated: useNativeDriver is not supported' on web preview — expected for web (React Native Web fallback); harmless. Also 'props.pointerEvents is deprecated. Use style.pointerEvents' warning from a react-native-web component — cosmetic only."]}
+    ],
+    "react_native_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/backend_test.py", "/app/test_reports/pytest/pytest_results.xml"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py is ~750 lines; still readable but approaching the 700-line threshold — consider splitting into routers (auth/branches/menu/public) in a future iteration.",
+    "GET /api/branches/{id}/tables allows any authenticated user of the tenant to list tables (fine), but note staff role has no explicit restriction for viewing tables/categories/items; that appears intentional for MVP.",
+    "PATCH /api/items/{id} logs only price change (per spec) — availability/visibility have their own dedicated endpoints and are logged there. Consistent."
+  ],
+  "updated_files": ["/app/backend/tests/backend_test.py (new), /app/test_reports/pytest/pytest_results.xml"],
+  "success_rate": {"backend": "100%", "frontend": "100% (flows exercised: login, register screen, dashboard load, orders toggle, tab nav, settings, public menu)"},
+  "seed_data_creation": "Backend seed_demo() creates admin@demo.com/staff@demo.com + one branch + one table (qr_token=demo-table-1) + one category + one item. Tests also create TEST_ prefixed tenants/branches/items which are cleaned up in-flow (branch delete cascades).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Regression suite at /app/backend/tests/backend_test.py (run with `-o addopts='' ` to disable xdist parallel — some tests are order-sensitive on shared demo tenant change_logs). All 31 tests green against public URL. Frontend playwright checks confirm login->dashboard->tabs->public menu flow works end-to-end in RTL Arabic. Deprecated packages: none detected. QR code rendering uses react-native-qrcode-svg (not exercised via playwright — SVG rendering in modal was not opened; can be added later)."
+}
