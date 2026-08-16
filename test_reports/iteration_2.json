@@ -1,0 +1,38 @@
+{
+  "summary": "Phase 2/3 features tested end-to-end. Backend: 27/27 new tests + 31/31 regression tests = 58/58 pytest cases pass. Covered: public /api/public/menu now returns offers[] + item sizes[] + addons[]; public POST /waiter-call/{qr} creates+dedupes pending calls (invalid token → 404); public POST /order/{qr} creates order, computes total, returns {id,status:'new',total}, rejects when orders_enabled=false (409) or item unavailable (409), invalid token → 404; public GET /order-status/{id} returns status (404 if missing). Auth /orders + /waiter-calls + /live + PATCH /orders/{id}/status + PATCH /waiter-calls/{id}/ack all reachable by staff (current_user, not require_admin); admin-only writes on /offers verified (staff POST → 403). Items persist sizes[]/addons[] on create and update. Order status change logged in change_logs. Multi-tenant isolation verified: tenant B cannot patch tenant A's order (404). Frontend customer /m/demo-table-1 flow: offers banner renders, tap item opens customization sheet (sizes radio + addons checkbox + qty ± stepper) → Add to cart → view-cart-btn → Send Order posts and 'order-status-bar' appears with 'تم الاستلام'; Call Waiter button POSTs and toast shown. Admin Orders tab (/orders): waiter-call card with 'استلمت' ack works and removes the call in real-time; order cards show status pill 'جديد' with بدء التحضير/ملغي buttons; tapping progresses order to 'قيد التحضير' and reveals 'جاهز'. Tab badge on 'الطلبات' shows alert_count (3→1 after ack+progress). Polling via /api/live refreshes state.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Global (web)", "issues": ["Non-blocking react-native-web warning 'props.pointerEvents is deprecated. Use style.pointerEvents' and 'Animated: useNativeDriver is not supported' — cosmetic only, expected on web."]}
+    ],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/backend_test.py",
+    "/app/backend/tests/test_phase23.py",
+    "/app/test_reports/pytest/phase23_results.xml"
+  ],
+  "action_items": [
+    "seed_demo() in server.py does NOT seed sizes/addons on the demo item or any offer (the review request implied 'seeded item now has 2 sizes + 2 addons; 1 active offer exists'). Existing DB already had admin user so seed short-circuits. The testing agent programmatically seeded these before frontend flow tests. Consider making seed_demo idempotently upsert sizes/addons on the demo item and ensure one active offer so fresh manual QA works without curl setup.",
+    "server.py is ~990 lines (was 750 last iteration). Consider splitting into routers (auth, menu, orders, offers, public) — not blocking."
+  ],
+  "critical_code_review_comments": [
+    "Public order endpoint stores unit_price from the client payload rather than re-reading item price — trust-boundary risk (customer can spoof price). Consider computing unit_price server-side from the DB item + selected size + addons. Report to main agent as a security hardening item.",
+    "public_waiter_call dedupe check uses only status='pending' — no time bound in the query despite the comment mentioning 2-minute window. Effectively 'any pending call for this table returns existing id'. Acceptable but comment is misleading.",
+    "PATCH /orders/{id}/status logs the new status but not the old status; consider recording {old,new} like update_price for better audit.",
+    "Order status transitions are not enforced server-side (e.g., completed→new is possible). Consider a state machine check.",
+    "Public order endpoint 404s on invalid item_id via the 'الصنف غير متوفر' 409 branch — acceptable, but 404 for wrong-tenant item_id would be more precise."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_phase23.py (new)",
+    "/app/test_reports/pytest/phase23_results.xml (new)"
+  ],
+  "success_rate": {"backend": "100% (58/58)", "frontend": "100% (customer offer/customize/cart/order/waiter-call + admin ack/progress verified)"},
+  "seed_data_creation": "Test agent seeded: item sizes [S:0, L:10] + addons [Cheese:3, Olives:2] on the demo item and one active offer 'خصم اليوم / Today's Discount' on the demo branch, via authenticated admin API. Backend seed_demo() itself only creates the base tenant/branch/table/category/item and is idempotent (short-circuits on existing admin@demo.com).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Run backend tests with: `export EXPO_PUBLIC_BACKEND_URL=https://dine-scan-18.preview.emergentagent.com && pytest /app/backend/tests/ -o addopts='' -v`. Both test_phase23.py and backend_test.py must pass. Customer web flow: modal children inside react-native-web Modal are technically 'outside viewport' for Playwright's default click — use `page.eval_on_selector(sel, 'el=>el.click()')` to click size/addon/qty inside the customize sheet. Login testIDs are `login-email-input`, `login-password-input`, `login-submit-button`. Admin orders route is `/orders` (Expo Router tabs). Ack testIDs are `ack-call-{id}`; status-progression buttons are `order-{id}-preparing|ready|completed|cancelled`.",
+  "rca_of_issue": "N/A — no failures"
+}

@@ -10,6 +10,7 @@ import { useAppFonts } from "@/src/hooks/use-app-fonts";
 import { AuthProvider } from "@/src/auth";
 import { I18nProvider } from "@/src/i18n";
 import { ToastProvider } from "@/src/ui";
+import { LiveProvider } from "@/src/live";
 
 // Disable logbox errors etc so that users can see the app
 // and agent works as expected.
@@ -43,7 +44,9 @@ export default function RootLayout() {
         <I18nProvider>
           <AuthProvider>
             <ToastProvider>
-              <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: "#FFFFFF" } }} />
+              <LiveProvider>
+                <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: "#FFFFFF" } }} />
+              </LiveProvider>
             </ToastProvider>
           </AuthProvider>
         </I18nProvider>

@@ -241,6 +241,11 @@ class AddonModel(BaseModel):
     price: float = 0.0
 
 
+class SizeModel(BaseModel):
+    name: Dict[str, str]
+    price: float = 0.0
+
+
 class ItemIn(BaseModel):
     branch_id: str
     category_id: str
@@ -249,6 +254,7 @@ class ItemIn(BaseModel):
     price: float
     image_url: Optional[str] = None
     addons: Optional[List[AddonModel]] = None
+    sizes: Optional[List[SizeModel]] = None
     visible: Optional[bool] = True
     available: Optional[bool] = True
 
@@ -259,11 +265,43 @@ class ItemUpdate(BaseModel):
     price: Optional[float] = None
     image_url: Optional[str] = None
     addons: Optional[List[AddonModel]] = None
+    sizes: Optional[List[SizeModel]] = None
     category_id: Optional[str] = None
 
 
 class ToggleIn(BaseModel):
     value: bool
+
+
+class OfferIn(BaseModel):
+    branch_id: str
+    title: Dict[str, str]
+    description: Optional[Dict[str, str]] = None
+
+
+class OfferUpdate(BaseModel):
+    title: Optional[Dict[str, str]] = None
+    description: Optional[Dict[str, str]] = None
+    active: Optional[bool] = None
+
+
+class OrderLineIn(BaseModel):
+    item_id: str
+    name: Dict[str, str]
+    unit_price: float
+    qty: int = 1
+    size: Optional[Dict[str, Any]] = None
+    addons: List[Dict[str, Any]] = []
+    note: Optional[str] = ""
+
+
+class OrderCreateIn(BaseModel):
+    items: List[OrderLineIn]
+    note: Optional[str] = ""
+
+
+class OrderStatusIn(BaseModel):
+    status: str = Field(pattern=r"^(new|preparing|ready|completed|cancelled)$")
 
 
 # ---------------------------------------------------------------------------
@@ -547,6 +585,7 @@ async def create_item(data: ItemIn, admin: dict = Depends(require_admin)):
         "price": data.price,
         "image_url": data.image_url,
         "addons": [a.model_dump() for a in (data.addons or [])],
+        "sizes": [s.model_dump() for s in (data.sizes or [])],
         "visible": data.visible if data.visible is not None else True,
         "available": data.available if data.available is not None else True,
         "created_at": now_iso(),
@@ -671,12 +710,221 @@ async def public_menu(qr_token: str):
         c["items"] = items
         categories.append(c)
 
+    offers_cursor = db.offers.find({"branch_id": branch["id"], "active": True}).sort("created_at", -1)
+    offers = [clean(o) async for o in offers_cursor]
+
     return {
         "restaurant": {"name": restaurant["name"], "languages": restaurant.get("languages", ["ar"])},
         "branch": {"id": branch["id"], "name": branch["name"], "orders_enabled": branch.get("orders_enabled", True) and restaurant.get("orders_enabled", True)},
         "table": {"id": table["id"], "label": table["label"]},
         "categories": categories,
+        "offers": offers,
     }
+
+
+# ---------------------------------------------------------------------------
+# Public: waiter call + orders (no auth)
+# ---------------------------------------------------------------------------
+async def _resolve_table(qr_token: str):
+    table = await db.tables.find_one({"qr_token": qr_token})
+    if not table:
+        raise HTTPException(404, "الطاولة غير موجودة أو الرمز غير صحيح")
+    return table
+
+
+def _find_option(name: Optional[Dict[str, Any]], options: List[dict]) -> Optional[dict]:
+    """Match a client-sent size/addon back to the authoritative DB option."""
+    if not name:
+        return None
+    for o in options:
+        if o.get("name") == name:
+            return o
+    vals = set((name or {}).values())
+    for o in options:
+        if vals & set((o.get("name") or {}).values()):
+            return o
+    return None
+
+
+@api.post("/public/waiter-call/{qr_token}", status_code=201)
+async def public_waiter_call(qr_token: str):
+    table = await _resolve_table(qr_token)
+    # Avoid spam: reuse a pending call within the last 2 minutes for the same table.
+    existing = await db.waiter_calls.find_one({"table_id": table["id"], "status": "pending"})
+    if existing:
+        return {"ok": True, "id": existing["id"]}
+    call = {
+        "id": new_id(),
+        "tenant_id": table["tenant_id"],
+        "branch_id": table["branch_id"],
+        "table_id": table["id"],
+        "table_label": table["label"],
+        "status": "pending",
+        "created_at": now_iso(),
+    }
+    await db.waiter_calls.insert_one(call)
+    return {"ok": True, "id": call["id"]}
+
+
+@api.post("/public/order/{qr_token}", status_code=201)
+async def public_create_order(qr_token: str, data: OrderCreateIn):
+    table = await _resolve_table(qr_token)
+    restaurant = await db.restaurants.find_one({"id": table["tenant_id"]})
+    branch = await db.branches.find_one({"id": table["branch_id"]})
+    if not restaurant or not branch:
+        raise HTTPException(404, "غير موجود")
+    if not (restaurant.get("orders_enabled", True) and branch.get("orders_enabled", True)):
+        raise HTTPException(409, "الطلب غير متاح حالياً")
+    if not data.items:
+        raise HTTPException(400, "السلة فارغة")
+
+    lines = []
+    total = 0.0
+    for line in data.items:
+        item = await db.menu_items.find_one({"id": line.item_id, "tenant_id": table["tenant_id"]})
+        if not item or not item.get("available", True) or not item.get("visible", True):
+            nm = item.get("name", {}).get("ar") if item else line.name.get("ar", "")
+            raise HTTPException(409, f"الصنف غير متوفر: {nm or ''}")
+        qty = max(1, line.qty)
+        line_total = round(line.unit_price * qty, 2)
+        total += line_total
+        lines.append({
+            "item_id": line.item_id,
+            "name": line.name,
+            "unit_price": line.unit_price,
+            "qty": qty,
+            "size": line.size,
+            "addons": line.addons,
+            "note": line.note or "",
+            "line_total": line_total,
+        })
+
+    order = {
+        "id": new_id(),
+        "tenant_id": table["tenant_id"],
+        "branch_id": table["branch_id"],
+        "table_id": table["id"],
+        "table_label": table["label"],
+        "items": lines,
+        "total": round(total, 2),
+        "note": data.note or "",
+        "status": "new",
+        "created_at": now_iso(),
+        "updated_at": now_iso(),
+    }
+    await db.orders.insert_one(order)
+    return {"ok": True, "id": order["id"], "status": "new", "total": order["total"]}
+
+
+@api.get("/public/order-status/{order_id}")
+async def public_order_status(order_id: str):
+    o = await db.orders.find_one({"id": order_id})
+    if not o:
+        raise HTTPException(404, "الطلب غير موجود")
+    return {"id": o["id"], "status": o["status"], "total": o["total"], "table_label": o["table_label"]}
+
+
+# ---------------------------------------------------------------------------
+# Orders & waiter calls (auth: admin OR staff)
+# ---------------------------------------------------------------------------
+@api.get("/orders")
+async def list_orders(user: dict = Depends(current_user)):
+    cursor = db.orders.find({"tenant_id": user["tenant_id"]}).sort("created_at", -1).limit(100)
+    return [clean(o) async for o in cursor]
+
+
+@api.patch("/orders/{order_id}/status")
+async def update_order_status(order_id: str, data: OrderStatusIn, user: dict = Depends(current_user)):
+    res = await db.orders.update_one(
+        {"id": order_id, "tenant_id": user["tenant_id"]},
+        {"$set": {"status": data.status, "updated_at": now_iso()}},
+    )
+    if res.matched_count == 0:
+        raise HTTPException(404, "Not found")
+    await log_change(user["tenant_id"], user, "update_order_status", "order", order_id, {"status": data.status})
+    o = await db.orders.find_one({"id": order_id})
+    return clean(o)
+
+
+@api.get("/waiter-calls")
+async def list_waiter_calls(user: dict = Depends(current_user)):
+    cursor = db.waiter_calls.find({"tenant_id": user["tenant_id"]}).sort("created_at", -1).limit(50)
+    return [clean(c) async for c in cursor]
+
+
+@api.patch("/waiter-calls/{call_id}/ack")
+async def ack_waiter_call(call_id: str, user: dict = Depends(current_user)):
+    res = await db.waiter_calls.update_one(
+        {"id": call_id, "tenant_id": user["tenant_id"]},
+        {"$set": {"status": "acknowledged", "updated_at": now_iso()}},
+    )
+    if res.matched_count == 0:
+        raise HTTPException(404, "Not found")
+    return {"ok": True}
+
+
+@api.get("/live")
+async def live(user: dict = Depends(current_user)):
+    tid = user["tenant_id"]
+    orders_cursor = db.orders.find({"tenant_id": tid}).sort("created_at", -1).limit(60)
+    orders = [clean(o) async for o in orders_cursor]
+    calls_cursor = db.waiter_calls.find({"tenant_id": tid, "status": "pending"}).sort("created_at", -1)
+    calls = [clean(c) async for c in calls_cursor]
+    new_orders = sum(1 for o in orders if o["status"] == "new")
+    return {
+        "orders": orders,
+        "waiter_calls": calls,
+        "new_orders_count": new_orders,
+        "pending_calls_count": len(calls),
+        "alert_count": new_orders + len(calls),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Offers (admin write, both read)
+# ---------------------------------------------------------------------------
+@api.get("/branches/{branch_id}/offers")
+async def list_offers(branch_id: str, user: dict = Depends(current_user)):
+    cursor = db.offers.find({"branch_id": branch_id, "tenant_id": user["tenant_id"]}).sort("created_at", -1)
+    return [clean(o) async for o in cursor]
+
+
+@api.post("/offers", status_code=201)
+async def create_offer(data: OfferIn, admin: dict = Depends(require_admin)):
+    branch = await db.branches.find_one({"id": data.branch_id, "tenant_id": admin["tenant_id"]})
+    if not branch:
+        raise HTTPException(404, "Branch not found")
+    offer = {
+        "id": new_id(),
+        "tenant_id": admin["tenant_id"],
+        "branch_id": data.branch_id,
+        "title": data.title,
+        "description": data.description or {},
+        "active": True,
+        "created_at": now_iso(),
+    }
+    await db.offers.insert_one(offer)
+    await log_change(admin["tenant_id"], admin, "create_offer", "offer", offer["id"], {"title": data.title})
+    return clean(offer)
+
+
+@api.patch("/offers/{offer_id}")
+async def update_offer(offer_id: str, data: OfferUpdate, admin: dict = Depends(require_admin)):
+    updates = {k: v for k, v in data.model_dump().items() if v is not None}
+    res = await db.offers.update_one({"id": offer_id, "tenant_id": admin["tenant_id"]}, {"$set": updates})
+    if res.matched_count == 0:
+        raise HTTPException(404, "Not found")
+    o = await db.offers.find_one({"id": offer_id})
+    return clean(o)
+
+
+@api.delete("/offers/{offer_id}")
+async def delete_offer(offer_id: str, admin: dict = Depends(require_admin)):
+    res = await db.offers.delete_one({"id": offer_id, "tenant_id": admin["tenant_id"]})
+    if res.deleted_count == 0:
+        raise HTTPException(404, "Not found")
+    await log_change(admin["tenant_id"], admin, "delete_offer", "offer", offer_id, {})
+    return {"ok": True}
 
 
 # ---------------------------------------------------------------------------

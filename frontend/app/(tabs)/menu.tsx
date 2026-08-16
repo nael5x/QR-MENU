@@ -48,6 +48,7 @@ export default function Menu() {
   const { t, lang } = useI18n();
   const toast = useToast();
   const menuLangs = restaurant?.languages?.length ? restaurant.languages : ["ar"];
+  const primaryLang = menuLangs[0];
 
   const [branches, setBranches] = useState<Branch[]>([]);
   const [branchId, setBranchId] = useState<string | null>(null);
@@ -70,6 +71,15 @@ export default function Menu() {
   const [iAvailable, setIAvailable] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [savingItem, setSavingItem] = useState(false);
+  const [iSizes, setISizes] = useState<{ name: string; price: string }[]>([]);
+  const [iAddons, setIAddons] = useState<{ name: string; price: string }[]>([]);
+
+  // offers
+  const [offersModal, setOffersModal] = useState(false);
+  const [offers, setOffers] = useState<{ id: string; title: Record<string, string>; description: Record<string, string>; active: boolean }[]>([]);
+  const [oTitle, setOTitle] = useState("");
+  const [oDesc, setODesc] = useState("");
+  const [savingOffer, setSavingOffer] = useState(false);
 
   const loadBranches = useCallback(async () => {
     try {
@@ -156,6 +166,8 @@ export default function Menu() {
     setICat(categoryId);
     setIVisible(true);
     setIAvailable(true);
+    setISizes([]);
+    setIAddons([]);
     setItemModal(true);
   };
 
@@ -168,6 +180,8 @@ export default function Menu() {
     setICat(item.category_id);
     setIVisible(item.visible);
     setIAvailable(item.available);
+    setISizes(((item as any).sizes || []).map((s: any) => ({ name: pick(s.name, primaryLang), price: String(s.price ?? "") })));
+    setIAddons(((item as any).addons || []).map((a: any) => ({ name: pick(a.name, primaryLang), price: String(a.price ?? "") })));
     setItemModal(true);
   };
 
@@ -206,6 +220,12 @@ export default function Menu() {
       return;
     }
     setSavingItem(true);
+    const toDict = (arr: { name: string; price: string }[]) =>
+      arr
+        .filter((x) => x.name.trim())
+        .map((x) => ({ name: { [primaryLang]: x.name.trim() }, price: parseFloat(x.price) || 0 }));
+    const sizesPayload = toDict(iSizes);
+    const addonsPayload = toDict(iAddons);
     try {
       if (editing) {
         await apiPatch(`/items/${editing.id}`, {
@@ -214,6 +234,8 @@ export default function Menu() {
           price: priceNum,
           image_url: iImage,
           category_id: iCat,
+          sizes: sizesPayload,
+          addons: addonsPayload,
         });
         if (iVisible !== editing.visible) await apiPatch(`/items/${editing.id}/visibility`, { value: iVisible });
         if (iAvailable !== editing.available) await apiPatch(`/items/${editing.id}/availability`, { value: iAvailable });
@@ -227,6 +249,8 @@ export default function Menu() {
           image_url: iImage,
           visible: iVisible,
           available: iAvailable,
+          sizes: sizesPayload,
+          addons: addonsPayload,
         });
       }
       setItemModal(false);
@@ -259,9 +283,70 @@ export default function Menu() {
     }
   };
 
+  // ----- offers -----
+  const openOffers = async () => {
+    setOffersModal(true);
+    if (!branchId) return;
+    try {
+      setOffers(await apiGet(`/branches/${branchId}/offers`));
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const createOffer = async () => {
+    if (!oTitle.trim() || !branchId) {
+      toast(t("required"), "error");
+      return;
+    }
+    setSavingOffer(true);
+    try {
+      await apiPost("/offers", {
+        branch_id: branchId,
+        title: { [primaryLang]: oTitle.trim() },
+        description: oDesc.trim() ? { [primaryLang]: oDesc.trim() } : {},
+      });
+      setOTitle("");
+      setODesc("");
+      toast(t("save"), "success");
+      setOffers(await apiGet(`/branches/${branchId}/offers`));
+    } catch (e: any) {
+      toast(e.message || t("error_generic"), "error");
+    } finally {
+      setSavingOffer(false);
+    }
+  };
+
+  const toggleOffer = async (id: string, active: boolean) => {
+    try {
+      await apiPatch(`/offers/${id}`, { active: !active });
+      setOffers(await apiGet(`/branches/${branchId}/offers`));
+    } catch (e: any) {
+      toast(e.message || t("error_generic"), "error");
+    }
+  };
+
+  const deleteOffer = async (id: string) => {
+    try {
+      await apiDelete(`/offers/${id}`);
+      setOffers(await apiGet(`/branches/${branchId}/offers`));
+    } catch (e: any) {
+      toast(e.message || t("error_generic"), "error");
+    }
+  };
+
   return (
     <Screen>
-      <Header title={t("menu")} />
+      <Header
+        title={t("menu")}
+        right={
+          isAdmin && branchId ? (
+            <Pressable testID="open-offers-btn" onPress={openOffers} hitSlop={10}>
+              <Ionicons name="pricetag" size={26} color={colors.brand} />
+            </Pressable>
+          ) : null
+        }
+      />
 
       {/* Branch chip row (sticky header chrome) */}
       {branches.length > 0 ? (
@@ -459,6 +544,56 @@ export default function Menu() {
                 ))}
                 <Field testID="item-price-input" label={t("price")} value={iPrice} onChangeText={setIPrice} keyboardType="decimal-pad" />
 
+                {/* Sizes editor */}
+                <View style={{ marginBottom: spacing.md }}>
+                  <View style={styles.editorHead}>
+                    <Txt weight="semibold" size={fontSize.sm} color={colors.onSurfaceSecondary}>
+                      {t("sizes")}
+                    </Txt>
+                    <Pressable testID="add-size-row" onPress={() => setISizes((p) => [...p, { name: "", price: "" }])} hitSlop={8}>
+                      <Ionicons name="add-circle" size={22} color={colors.brand} />
+                    </Pressable>
+                  </View>
+                  {iSizes.map((sz, idx) => (
+                    <View key={idx} style={styles.optEditorRow}>
+                      <View style={{ flex: 2 }}>
+                        <Field testID={`size-name-${idx}`} value={sz.name} onChangeText={(v) => setISizes((p) => p.map((x, i) => (i === idx ? { ...x, name: v } : x)))} placeholder={t("size")} />
+                      </View>
+                      <View style={{ flex: 1, marginStart: spacing.sm }}>
+                        <Field testID={`size-price-${idx}`} value={sz.price} onChangeText={(v) => setISizes((p) => p.map((x, i) => (i === idx ? { ...x, price: v } : x)))} placeholder="+0" keyboardType="decimal-pad" />
+                      </View>
+                      <Pressable testID={`remove-size-${idx}`} onPress={() => setISizes((p) => p.filter((_, i) => i !== idx))} style={styles.rowTrash} hitSlop={8}>
+                        <Ionicons name="close-circle" size={22} color={colors.error} />
+                      </Pressable>
+                    </View>
+                  ))}
+                </View>
+
+                {/* Addons editor */}
+                <View style={{ marginBottom: spacing.md }}>
+                  <View style={styles.editorHead}>
+                    <Txt weight="semibold" size={fontSize.sm} color={colors.onSurfaceSecondary}>
+                      {t("addons")}
+                    </Txt>
+                    <Pressable testID="add-addon-row" onPress={() => setIAddons((p) => [...p, { name: "", price: "" }])} hitSlop={8}>
+                      <Ionicons name="add-circle" size={22} color={colors.brand} />
+                    </Pressable>
+                  </View>
+                  {iAddons.map((ad, idx) => (
+                    <View key={idx} style={styles.optEditorRow}>
+                      <View style={{ flex: 2 }}>
+                        <Field testID={`addon-name-${idx}`} value={ad.name} onChangeText={(v) => setIAddons((p) => p.map((x, i) => (i === idx ? { ...x, name: v } : x)))} placeholder={t("addons")} />
+                      </View>
+                      <View style={{ flex: 1, marginStart: spacing.sm }}>
+                        <Field testID={`addon-price-${idx}`} value={ad.price} onChangeText={(v) => setIAddons((p) => p.map((x, i) => (i === idx ? { ...x, price: v } : x)))} placeholder="+0" keyboardType="decimal-pad" />
+                      </View>
+                      <Pressable testID={`remove-addon-${idx}`} onPress={() => setIAddons((p) => p.filter((_, i) => i !== idx))} style={styles.rowTrash} hitSlop={8}>
+                        <Ionicons name="close-circle" size={22} color={colors.error} />
+                      </Pressable>
+                    </View>
+                  ))}
+                </View>
+
                 <View style={styles.toggleRow}>
                   <Txt weight="semibold" style={{ flex: 1 }}>
                     {t("available")}
@@ -479,6 +614,54 @@ export default function Menu() {
                   <View style={{ flex: 1 }}>
                     <PrimaryButton title={t("save")} onPress={saveItem} loading={savingItem} testID="save-item-button" />
                   </View>
+                </View>
+              </ScrollView>
+            </View>
+          </KeyboardAvoidingView>
+        </View>
+      </Modal>
+
+      {/* Offers modal */}
+      <Modal visible={offersModal} animationType="slide" transparent onRequestClose={() => setOffersModal(false)}>
+        <View style={styles.modalWrap}>
+          <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined}>
+            <View style={[styles.sheet, { maxHeight: "88%" }]}>
+              <View style={styles.sheetHead}>
+                <Txt weight="bold" size={fontSize.xl}>
+                  {t("offers")}
+                </Txt>
+                <Pressable testID="close-offers-modal" onPress={() => setOffersModal(false)} hitSlop={10}>
+                  <Ionicons name="close" size={26} color={colors.onSurface} />
+                </Pressable>
+              </View>
+              <ScrollView keyboardShouldPersistTaps="handled">
+                <Field testID="offer-title-input" label={t("offer_title")} value={oTitle} onChangeText={setOTitle} />
+                <Field testID="offer-desc-input" label={t("offer_desc")} value={oDesc} onChangeText={setODesc} multiline />
+                <PrimaryButton title={t("add_offer")} icon="add" onPress={createOffer} loading={savingOffer} testID="save-offer-button" />
+
+                <View style={{ marginTop: spacing.lg }}>
+                  {offers.length === 0 ? (
+                    <Txt color={colors.muted}>{t("no_offers")}</Txt>
+                  ) : (
+                    offers.map((o) => (
+                      <View key={o.id} style={styles.offerRow} testID={`offer-${o.id}`}>
+                        <View style={{ flex: 1 }}>
+                          <Txt weight="bold" color={o.active ? colors.onSurface : colors.muted}>
+                            {pick(o.title, primaryLang)}
+                          </Txt>
+                          {pick(o.description, primaryLang) ? (
+                            <Txt size={fontSize.sm} color={colors.muted}>
+                              {pick(o.description, primaryLang)}
+                            </Txt>
+                          ) : null}
+                        </View>
+                        <Switch testID={`offer-toggle-${o.id}`} value={o.active} onValueChange={() => toggleOffer(o.id, o.active)} />
+                        <Pressable testID={`delete-offer-${o.id}`} onPress={() => deleteOffer(o.id)} hitSlop={8} style={{ marginStart: spacing.sm }}>
+                          <Ionicons name="trash-outline" size={20} color={colors.error} />
+                        </Pressable>
+                      </View>
+                    ))
+                  )}
                 </View>
               </ScrollView>
             </View>
@@ -550,4 +733,16 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   toggleRow: { flexDirection: "row", alignItems: "center", paddingVertical: spacing.sm },
+  editorHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: spacing.xs },
+  optEditorRow: { flexDirection: "row", alignItems: "flex-start" },
+  rowTrash: { paddingTop: 14, paddingHorizontal: 4 },
+  offerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 2,
+    borderColor: colors.border,
+    padding: spacing.md,
+    marginBottom: spacing.sm,
+    backgroundColor: colors.surface,
+  },
 });

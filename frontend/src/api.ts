@@ -54,6 +54,15 @@ export async function apiPublic(path: string) {
   return handle(res);
 }
 
+export async function apiPublicPost(path: string, data?: any) {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: data !== undefined ? JSON.stringify(data) : undefined,
+  });
+  return handle(res);
+}
+
 // Multipart image upload — handles both native and web runtimes.
 export async function uploadImage(uri: string, name: string, type: string): Promise<string> {
   const { Platform } = require("react-native");

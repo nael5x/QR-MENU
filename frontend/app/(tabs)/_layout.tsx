@@ -3,10 +3,12 @@ import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { Platform, View } from "react-native";
 import { useI18n } from "@/src/i18n";
+import { useLive } from "@/src/live";
 import { colors, ff, fontSize } from "@/src/theme";
 
 export default function TabsLayout() {
   const { t } = useI18n();
+  const { alertCount } = useLive();
   return (
     <Tabs
       screenOptions={{
@@ -29,6 +31,15 @@ export default function TabsLayout() {
         options={{
           title: t("dashboard"),
           tabBarIcon: ({ color, focused }) => <TabIcon name="grid" color={color} focused={focused} />,
+        }}
+      />
+      <Tabs.Screen
+        name="orders"
+        options={{
+          title: t("orders"),
+          tabBarBadge: alertCount > 0 ? alertCount : undefined,
+          tabBarBadgeStyle: { backgroundColor: colors.brand, color: colors.onBrand, fontFamily: ff.bold, fontSize: 10 },
+          tabBarIcon: ({ color, focused }) => <TabIcon name="notifications" color={color} focused={focused} />,
         }}
       />
       <Tabs.Screen
