@@ -1,0 +1,168 @@
+{
+  "app_name": "SaaS Restaurant Admin & Web Menu",
+  "personality": "5 Brutalist Mobile LIGHT",
+  "personality_one_liner": "A high-density, no-nonsense operational dashboard optimized for fast B2B interactions, utilizing hard structural boundaries and uncompromising utility.",
+  "color": {
+    "surface": "#FFFFFF",
+    "onSurface": "#000000",
+    "surfaceSecondary": "#F5F5F5",
+    "onSurfaceSecondary": "#1A1A1A",
+    "surfaceTertiary": "#EBEBEB",
+    "onSurfaceTertiary": "#111111",
+    "surfaceInverse": "#111111",
+    "onSurfaceInverse": "#FFFFFF",
+    "brand": "#FF5500",
+    "brandPrimary": "#FF5500",
+    "onBrandPrimary": "#FFFFFF",
+    "brandSecondary": "#CC4400",
+    "onBrandSecondary": "#FFFFFF",
+    "brandTertiary": "#FFE5D9",
+    "onBrandTertiary": "#CC4400",
+    "success": "#009944",
+    "onSuccess": "#FFFFFF",
+    "warning": "#FFCC00",
+    "onWarning": "#000000",
+    "error": "#FF0033",
+    "onError": "#FFFFFF",
+    "info": "#0066FF",
+    "onInfo": "#FFFFFF",
+    "border": "#111111",
+    "borderStrong": "#000000",
+    "divider": "#EBEBEB"
+  },
+  "typography": {
+    "displayFontFamily": "IBM Plex Sans Arabic",
+    "textFontFamily": "IBM Plex Sans Arabic",
+    "monoFontFamily": "IBM Plex Mono",
+    "scale": {
+      "sm": 12,
+      "base": 14,
+      "lg": 16,
+      "xl": 20,
+      "2xl": 24
+    }
+  },
+  "spacing": {
+    "rule": "Use rigid grid structures with exposed dividers and obvious hierarchy. Spacing must be structural, separating dense data cleanly.",
+    "xs": 4,
+    "sm": 8,
+    "md": 12,
+    "lg": 16,
+    "xl": 24,
+    "2xl": 32,
+    "3xl": 48
+  },
+  "radius_tokens": {
+    "sm": 0,
+    "md": 0,
+    "lg": 0,
+    "pill": 999
+  },
+  "shadow_tier": 0,
+  "navigation": "bottom_tabs",
+  "icon_set": "Phosphor",
+  "glassmorphism": {
+    "enabled": false,
+    "do's": [],
+    "dont's": [
+      "No blur or glassmorphism anywhere. Use solid colors and hard borders to maintain maximum performance and a brutalist B2B utility aesthetic."
+    ]
+  },
+  "platform_libraries": {
+    "glass": {
+      "ios": "none",
+      "android": "none",
+      "low_end_android_fallback": "solid surfaceSecondary"
+    },
+    "image": "expo-image",
+    "blur": "none",
+    "bottom_sheet": "@gorhom/bottom-sheet",
+    "animation": "react-native-reanimated",
+    "gesture": "react-native-gesture-handler"
+  },
+  "screens": [
+    {
+      "name": "Login",
+      "purpose": "Admin authentication portal.",
+      "states": {
+        "loading": "Solid colored background with a prominent loading spinner.",
+        "empty": "N/A",
+        "error": "Hard red warning banner at the top of the screen."
+      },
+      "layout": "High-contrast edge-to-edge inputs. Label above input. Sticky submit button in KeyboardAvoidingView."
+    },
+    {
+      "name": "Dashboard (Overview)",
+      "purpose": "Real-time view of orders, active tables, and quick restaurant availability toggles.",
+      "states": {
+        "loading": "Monospace structural skeleton loaders.",
+        "empty": "No active orders text inside a thick bordered box.",
+        "error": "Error block with a retry button using structural padding."
+      },
+      "layout": "2-column grid for KPI widgets (Revenue, Active Tables, Pending Orders). A prominent toggle switch at the top to pause/resume incoming orders instantly."
+    },
+    {
+      "name": "Branches Management",
+      "purpose": "CRUD interface for branches and managing tables per branch (including QR generation).",
+      "states": {
+        "loading": "Skeleton row items with exposed borders.",
+        "empty": "Illustration-free empty state. Monospace text: 'NO BRANCHES FOUND' and a primary action button.",
+        "error": "Text-heavy error description with a reload button."
+      },
+      "layout": "Thick-bordered list items. Tap a branch to navigate to its tables. Tables displayed in a grid with large monospace identifiers and a 'View/Print QR' primary action for each."
+    },
+    {
+      "name": "Menu Management",
+      "purpose": "Fast operational view to add items, assign categories, and toggle stock availability.",
+      "states": {
+        "loading": "Spinner in the center of the screen.",
+        "empty": "Text block stating 'Menu empty. Add first category.'",
+        "error": "Hard-bordered error section with text and retry."
+      },
+      "layout": "Categorized section lists. Each row contains item name, price, and a high-contrast fast-action toggle for 'in stock/out of stock'. Structural dividers between items."
+    },
+    {
+      "name": "Language & Settings",
+      "purpose": "Toggle App language (Arabic/English) and define menu languages for customers.",
+      "states": {
+        "loading": "N/A",
+        "empty": "N/A",
+        "error": "N/A"
+      },
+      "layout": "List of settings items with hard bottom dividers. Radio buttons for language selection."
+    },
+    {
+      "name": "Customer Web Menu (Expo Web)",
+      "purpose": "Public-facing lightweight menu accessed via QR code.",
+      "states": {
+        "loading": "Minimal skeleton for fast perceived load times.",
+        "empty": "N/A",
+        "error": "Simple text message for offline/error states."
+      },
+      "layout": "Extremely fast, image-lazy-loaded scrolling list. Same Brutalist/Utility UI to maintain performance and brand. Fixed bottom bar to view current order/basket. Heavy emphasis on readable text and fast image loading on poor connections."
+    }
+  ],
+  "images": {
+    "restaurant_branch_cover": {
+      "url": "https://images.unsplash.com/photo-1631615535272-1106aa1b3854?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2OTF8MHwxfHNlYXJjaHwxfHxyZXN0YXVyYW50JTIwYWJzdHJhY3QlMjBiYWNrZ3JvdW5kfGVufDB8fHx8MTc4NjkxODE2Nnww&ixlib=rb-4.1.0&q=85",
+      "alt": "A restaurant interior showing abstract lighting elements."
+    },
+    "menu_item_placeholder": {
+      "url": "https://images.unsplash.com/photo-1632203171982-cc0df6e9ceb4?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1OTV8MHwxfHNlYXJjaHwxfHxidXJnZXIlMjBsb2dvJTIwcG5nJTIwdHJhbnNwYXJlbnR8ZW58MHx8fHwxNzg2OTE4MTY2fDA&ixlib=rb-4.1.0&q=85",
+      "alt": "Floating burger illustration for menu item placeholder."
+    }
+  },
+  "haptics": {
+    "login_submit": "medium",
+    "toggle_restaurant_availability": "heavy",
+    "toggle_menu_item_stock": "light",
+    "generate_qr_code": "medium"
+  },
+  "instructions_to_main_agent": [
+    "CRITICAL: Arabic (RTL) support is paramount. Ensure you use React Native's `I18nManager` correctly. Utilize logical spacing (`marginStart`, `paddingEnd`, etc.) instead of hardcoded left/right values.",
+    "The B2B SaaS layout should remain uncompromisingly functional. Employ the 5 Brutalist Mobile LIGHT principles: no rounded corners, no soft shadows, and rigid grids with 1pt/2pt dark borders for structural components.",
+    "Typography: Use `IBM Plex Sans Arabic` universally for Arabic/English body copy, and `IBM Plex Mono` for numerical values (prices, table numbers) and metadata to align with the Brutalist layout.",
+    "Performance constraint: The Web app must be lightning fast since customers scan the QR over mobile networks. Use the same brutalist UI for the web menu to keep DOM nodes minimal and eliminate heavy styling/glass effects.",
+    "Ensure 'out of stock' or 'restaurant offline' toggles utilize the `brandPrimary` (#FF5500) and `borderStrong` colors aggressively to prevent accidental activations."
+  ]
+}
